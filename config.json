@@ -1,0 +1,14 @@
+{
+  "participants": [
+    { "name": "ChatGPT", "type": "openclaw", "model": "gpt-5.3-codex" },
+    { "name": "Llama3",  "type": "ollama",   "model": "llama3.1:8b" },
+    { "name": "Mistral", "type": "ollama",   "model": "mistral-nemo" }
+  ],
+  "benchmarkTopics": [
+    "AIは人間の仕事を奪うか",
+    "リモートワークは生産性を上げるか下げるか",
+    "SNSは社会をよくしているか悪くしているか",
+    "少子化対策として移民受け入れは有効か",
+    "電気自動車は本当に環境に優しいか"
+  ]
+}
