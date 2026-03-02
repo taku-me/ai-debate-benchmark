@@ -59,10 +59,11 @@ export function createMonitor(intervalMs = 2000) {
     const rams = metrics.map(m => m.ram_used);
     const cpus = metrics.map(m => m.cpu_load);
     return {
-      ram_peak_gb:  Math.max(...rams),
-      ram_min_gb:   Math.min(...rams),
+      ram_peak_gb:   Math.max(...rams),
+      ram_min_gb:    Math.min(...rams),
       cpu_load_peak: Math.max(...cpus),
       cpu_load_avg:  +(cpus.reduce((a, b) => a + b, 0) / cpus.length).toFixed(2),
+      cpu_count:     os.cpus().length,
       sample_count:  metrics.length,
       duration_sec:  Math.round(
         (new Date(metrics.at(-1).ts) - new Date(metrics[0].ts)) / 1000

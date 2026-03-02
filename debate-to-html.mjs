@@ -127,6 +127,33 @@ function buildHtml(data) {
       min-height: 100vh;
     }
 
+    @media print {
+      body { background: #fff; color: #111; font-size: 13px; }
+      .header { background: #f5f5f5; border-bottom: 1px solid #ccc; position: static; }
+      .header-topic { color: #111; }
+      .header-meta, .header-label { color: #555; }
+      .legend { background: #f5f5f5; border-bottom: 1px solid #eee; }
+      .legend-item { background: #eee; }
+      .legend-model { color: #777; }
+      .bubble {
+        background: #f9f9f9 !important;
+        border: 1px solid #ddd !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      .content { color: #222; }
+      .timestamp { color: #999; }
+      .round-divider span { border-color: #ccc; color: #888; }
+      .round-divider::before, .round-divider::after { background: #ddd; }
+      .avatar { background: #eee; border-color: #ddd; }
+      .score-table th { color: #777; border-color: #ddd; }
+      .score-table td { border-color: #eee; }
+      .judgment-summary { background: #f5f5f5; border-color: #ddd; color: #444; }
+      .footer { color: #aaa; }
+      /* グラフはPDFでは非表示（Canvas描画はPDFに含まれない） */
+      canvas { display: none; }
+    }
+
     /* ヘッダー */
     .header {
       background: #111;
@@ -405,6 +432,78 @@ function buildJudgment(data) {
   </div>`;
 }
 
+function buildHealth(s, ramTotal) {
+  const ramPct   = s.ram_peak_gb / ramTotal * 100;
+  const minFree  = +(ramTotal - s.ram_peak_gb).toFixed(2);
+  const cpuCount = s.cpu_count || 4;
+  const cpuPct   = s.cpu_load_peak / cpuCount * 100;
+
+  // RAM 判定
+  let ramBadge, ramColor, ramDetail, ramAdvice;
+  if (ramPct >= 95) {
+    ramBadge  = '危険';  ramColor = '#ef4444';
+    ramDetail = `ピーク ${s.ram_peak_gb} GB / ${ramTotal} GB（${ramPct.toFixed(0)}%）— 空き ${minFree} GB`;
+    ramAdvice = 'OOMリスクあり。参加モデル数を減らすか、より軽量なモデル（7B→3B等）への変更を検討してください。';
+  } else if (ramPct >= 85) {
+    ramBadge  = '注意';  ramColor = '#f59e0b';
+    ramDetail = `ピーク ${s.ram_peak_gb} GB / ${ramTotal} GB（${ramPct.toFixed(0)}%）— 空き ${minFree} GB`;
+    ramAdvice = '余裕が少ない状態。他の重いプロセスとの同時実行は避けること。';
+  } else {
+    ramBadge  = '正常';  ramColor = '#10a37f';
+    ramDetail = `ピーク ${s.ram_peak_gb} GB / ${ramTotal} GB（${ramPct.toFixed(0)}%）— 空き ${minFree} GB`;
+    ramAdvice = '余裕あり。モデルの追加や高性能モデルへの変更も可能な状態です。';
+  }
+
+  // CPU 判定（loadavg / コア数）
+  let cpuBadge, cpuColor, cpuDetail, cpuAdvice;
+  if (cpuPct >= 80) {
+    cpuBadge  = '危険';  cpuColor = '#ef4444';
+    cpuDetail = `ピーク ${s.cpu_load_peak}（${cpuCount}コア比 ${cpuPct.toFixed(0)}%）、平均 ${s.cpu_load_avg}`;
+    cpuAdvice = '高負荷。他のプロセスへの影響が大きく、応答遅延が発生する可能性があります。';
+  } else if (cpuPct >= 50) {
+    cpuBadge  = '注意';  cpuColor = '#f59e0b';
+    cpuDetail = `ピーク ${s.cpu_load_peak}（${cpuCount}コア比 ${cpuPct.toFixed(0)}%）、平均 ${s.cpu_load_avg}`;
+    cpuAdvice = '中〜高負荷。並列処理や追加タスクは控えめに。';
+  } else {
+    cpuBadge  = '正常';  cpuColor = '#10a37f';
+    cpuDetail = `ピーク ${s.cpu_load_peak}（${cpuCount}コア比 ${cpuPct.toFixed(0)}%）、平均 ${s.cpu_load_avg}`;
+    cpuAdvice = '負荷は軽微。CPU起因のボトルネックはありません。';
+  }
+
+  // 総評
+  const worstPct = Math.max(ramPct, cpuPct);
+  let overall;
+  if (worstPct >= 95) {
+    overall = `このマシンにとって限界に近い構成です。${ramPct >= cpuPct ? `RAM が ${ramPct.toFixed(0)}% まで逼迫しており、モデル増加や大型モデル化は困難です。` : `CPU が高負荷状態で、他サービスへの影響が懸念されます。`}`;
+  } else if (worstPct >= 85) {
+    overall = `現在の構成で動作しますが余裕は少ない状態です。安定運用のためにはモデルの軽量化かマシンスペックの強化を検討してください。`;
+  } else if (worstPct >= 50) {
+    overall = `適切な負荷範囲内です。現在の構成は安定しており、1〜2モデルの追加も試せます。`;
+  } else {
+    overall = `このマシンにとって軽い負荷です。モデル追加・ラウンド数増加・より大きなモデルへの変更を積極的に試せます。`;
+  }
+
+  const badge = (label, color) =>
+    `<span style="color:${color};border:1px solid ${color};padding:2px 10px;border-radius:10px;font-size:11px;font-weight:700;white-space:nowrap">${label}</span>`;
+
+  return `
+    <div style="background:#111;border:1px solid #222;border-radius:8px;padding:14px 16px;margin-bottom:14px;display:flex;flex-direction:column;gap:10px">
+      <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+        ${badge('RAM ' + ramBadge, ramColor)}
+        <span style="font-size:13px;color:#bbb">${ramDetail}</span>
+        <span style="font-size:12px;color:#666">${ramAdvice}</span>
+      </div>
+      <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+        ${badge('CPU ' + cpuBadge, cpuColor)}
+        <span style="font-size:13px;color:#bbb">${cpuDetail}</span>
+        <span style="font-size:12px;color:#666">${cpuAdvice}</span>
+      </div>
+      <div style="border-top:1px solid #1e1e1e;padding-top:10px;font-size:12px;color:#666;line-height:1.7">
+        💡 ${overall}
+      </div>
+    </div>`;
+}
+
 function buildMetrics(data) {
   const { metrics, metricsSummary: s } = data;
   if (!metrics?.length) return '';
@@ -430,12 +529,13 @@ function buildMetrics(data) {
       return `"ann${e.i}": { type: "line", xMin: ${e.i}, xMax: ${e.i}, borderColor: "${color}", borderWidth: 1, borderDash: [4,3], label: { display: true, content: "${speaker}", color: "${color}", font: { size: 10 }, position: "start" } }`;
     }).join(',\n');
 
+  const health = s ? buildHealth(s, ramTotal) : '';
+
   const summaryItems = s ? [
-    `RAM ピーク: <strong>${s.ram_peak_gb} GB</strong>`,
-    `RAM 最小: ${s.ram_min_gb} GB`,
-    `CPU loadavg ピーク: <strong>${s.cpu_load_peak}</strong>`,
-    `CPU loadavg 平均: ${s.cpu_load_avg}`,
-    `サンプル数: ${s.sample_count} (${s.duration_sec}秒)`,
+    `RAM ピーク: <strong>${s.ram_peak_gb} GB</strong> / ${ramTotal} GB`,
+    `CPU loadavg ピーク: <strong>${s.cpu_load_peak}</strong>（${s.cpu_count ?? '?'}コア）`,
+    `平均: RAM ${s.ram_min_gb}〜${s.ram_peak_gb} GB / CPU ${s.cpu_load_avg}`,
+    `${s.sample_count}サンプル・${s.duration_sec}秒`,
   ].map(t => `<span>${t}</span>`).join('') : '';
 
   return `
@@ -443,7 +543,8 @@ function buildMetrics(data) {
     <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:#555;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #222">
       📊 負荷監視レポート
     </div>
-    <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:#888;margin-bottom:16px">
+    ${health}
+    <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:#666;margin-bottom:16px">
       ${summaryItems}
     </div>
     <div style="background:#111;border:1px solid #222;border-radius:8px;padding:16px">
