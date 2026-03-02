@@ -79,6 +79,8 @@ function buildTurns(turns, totalRounds) {
 
     const s = getSpeaker(turn.speaker);
 
+    const spkClass = `spk-${turn.speaker.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+
     if (turn.error) {
       html += `
       <div class="message error-message">
@@ -90,7 +92,7 @@ function buildTurns(turns, totalRounds) {
       </div>`;
     } else {
       html += `
-      <div class="message" style="--speaker-color:${s.color};--speaker-bg:${s.bg}">
+      <div class="message ${spkClass}">
         <div class="avatar">${s.avatar}</div>
         <div class="bubble">
           <div class="speaker-name" style="color:${s.color}">${s.label}</div>
@@ -104,10 +106,24 @@ function buildTurns(turns, totalRounds) {
   return html;
 }
 
+function buildSpeakerCss(participants) {
+  return participants.map(p => {
+    const s = getSpeaker(p.name);
+    const cls = `spk-${p.name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
+    // カラーを rgba に分解して30%透明度のborderを生成
+    const hex = s.color.replace('#', '');
+    const r = parseInt(hex.slice(0,2), 16);
+    const g = parseInt(hex.slice(2,4), 16);
+    const b = parseInt(hex.slice(4,6), 16);
+    return `.${cls} .bubble { background: ${s.bg}; border-color: rgba(${r},${g},${b},0.3); }`;
+  }).join('\n    ');
+}
+
 function buildHtml(data) {
   const duration = data.completedAt
     ? formatDuration(data.startedAt, data.completedAt)
     : '実行中...';
+  const speakerCss = buildSpeakerCss(data.participants);
 
   return `<!DOCTYPE html>
 <html lang="ja">
@@ -128,30 +144,68 @@ function buildHtml(data) {
     }
 
     @media print {
-      body { background: #fff; color: #111; font-size: 13px; }
-      .header { background: #f5f5f5; border-bottom: 1px solid #ccc; position: static; }
-      .header-topic { color: #111; }
-      .header-meta, .header-label { color: #555; }
-      .legend { background: #f5f5f5; border-bottom: 1px solid #eee; }
-      .legend-item { background: #eee; }
-      .legend-model { color: #777; }
+      /* ── ベースリセット ── */
+      body {
+        background: #fff !important;
+        color: #111 !important;
+        font-size: 13px !important;
+      }
+
+      /* ── ヘッダー: sticky解除・1ページ目冒頭に固定 ── */
+      .header {
+        position: static !important;
+        background: #f0f0f0 !important;
+        border-bottom: 2px solid #333 !important;
+        page-break-after: avoid;
+      }
+      .header-label { color: #666 !important; }
+      .header-topic { color: #000 !important; }
+      .header-meta, .header-meta span { color: #444 !important; }
+
+      /* ── 参加者凡例 ── */
+      .legend { background: #f5f5f5 !important; border-bottom: 1px solid #ccc !important; }
+      .legend-item { background: #e8e8e8 !important; }
+      .legend-model { color: #555 !important; }
+
+      /* ── チャット ── */
+      .avatar { background: #eee !important; border-color: #ccc !important; }
       .bubble {
-        background: #f9f9f9 !important;
-        border: 1px solid #ddd !important;
+        background: #f7f7f7 !important;
+        border: 1px solid #ccc !important;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
       }
-      .content { color: #222; }
-      .timestamp { color: #999; }
-      .round-divider span { border-color: #ccc; color: #888; }
-      .round-divider::before, .round-divider::after { background: #ddd; }
-      .avatar { background: #eee; border-color: #ddd; }
-      .score-table th { color: #777; border-color: #ddd; }
-      .score-table td { border-color: #eee; }
-      .judgment-summary { background: #f5f5f5; border-color: #ddd; color: #444; }
-      .footer { color: #aaa; }
-      /* グラフはPDFでは非表示（Canvas描画はPDFに含まれない） */
-      canvas { display: none; }
+      .content { color: #111 !important; }
+      .timestamp { color: #777 !important; }
+      .round-divider span { color: #666 !important; border-color: #bbb !important; }
+      .round-divider::before,
+      .round-divider::after { background: #bbb !important; }
+      .error-bubble { background: #fff0f0 !important; border-color: #f99 !important; }
+      .message { page-break-inside: avoid; }
+
+      /* ── 審判スコア ── */
+      .judgment { page-break-inside: avoid; }
+      .judgment-header { color: #444 !important; border-color: #bbb !important; }
+      .score-table th { color: #555 !important; border-color: #bbb !important; }
+      .score-table td { color: #111 !important; border-color: #ddd !important; }
+      .score-bar { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .judgment-summary { background: #f5f5f5 !important; border-color: #ccc !important; color: #333 !important; }
+
+      /* ── ヘルス・対策案（クラスベース） ── */
+      .report-section { page-break-inside: avoid; }
+      .report-header { color: #444 !important; border-color: #bbb !important; }
+      .report-card { background: #f7f7f7 !important; border-color: #ccc !important; }
+      .health-detail { color: #111 !important; }
+      .health-advice { color: #444 !important; }
+      .health-summary { color: #333 !important; border-color: #bbb !important; }
+      .rec-title { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .rec-items { color: #333 !important; }
+
+      /* ── グラフは印刷省略（Canvas非対応） ── */
+      .metrics-chart-wrap { display: none !important; }
+
+      /* ── フッター ── */
+      .footer { color: #888 !important; }
     }
 
     /* ヘッダー */
@@ -256,8 +310,8 @@ function buildHtml(data) {
       border: 1px solid #252525;
     }
     .bubble {
-      background: var(--speaker-bg, #1a1a1a);
-      border: 1px solid color-mix(in srgb, var(--speaker-color, #444) 30%, transparent);
+      background: #1a1a1a;
+      border: 1px solid #333;
       border-radius: 4px 16px 16px 16px;
       padding: 12px 16px;
       max-width: calc(100% - 60px);
@@ -346,9 +400,29 @@ function buildHtml(data) {
       margin-right: 4px;
       border: 1px solid;
     }
+
+    /* ── スピーカー別バブル背景（動的生成） ── */
+    ${speakerCss}
   </style>
 </head>
 <body>
+  <script>
+    // 印刷時: bubble の着色背景を白紙に合わせてリセット
+    window.addEventListener('beforeprint', () => {
+      document.querySelectorAll('.bubble').forEach(el => {
+        el.dataset.origBg     = el.style.background    || '';
+        el.dataset.origBorder = el.style.borderColor   || '';
+        el.style.background   = '#f7f7f7';
+        el.style.borderColor  = '#ccc';
+      });
+    });
+    window.addEventListener('afterprint', () => {
+      document.querySelectorAll('.bubble').forEach(el => {
+        el.style.background   = el.dataset.origBg     || '';
+        el.style.borderColor  = el.dataset.origBorder || '';
+      });
+    });
+  </script>
 
   <div class="header">
     <div class="header-label">AI 討論ログ</div>
@@ -438,7 +512,6 @@ function buildHealth(s, ramTotal) {
   const cpuCount = s.cpu_count || 4;
   const cpuPct   = s.cpu_load_peak / cpuCount * 100;
 
-  // RAM 判定
   let ramBadge, ramColor, ramDetail, ramAdvice;
   if (ramPct >= 95) {
     ramBadge  = '危険';  ramColor = '#ef4444';
@@ -454,7 +527,6 @@ function buildHealth(s, ramTotal) {
     ramAdvice = '余裕あり。モデルの追加や高性能モデルへの変更も可能な状態です。';
   }
 
-  // CPU 判定（loadavg / コア数）
   let cpuBadge, cpuColor, cpuDetail, cpuAdvice;
   if (cpuPct >= 80) {
     cpuBadge  = '危険';  cpuColor = '#ef4444';
@@ -470,11 +542,12 @@ function buildHealth(s, ramTotal) {
     cpuAdvice = '負荷は軽微。CPU起因のボトルネックはありません。';
   }
 
-  // 総評
   const worstPct = Math.max(ramPct, cpuPct);
   let overall;
   if (worstPct >= 95) {
-    overall = `このマシンにとって限界に近い構成です。${ramPct >= cpuPct ? `RAM が ${ramPct.toFixed(0)}% まで逼迫しており、モデル増加や大型モデル化は困難です。` : `CPU が高負荷状態で、他サービスへの影響が懸念されます。`}`;
+    overall = ramPct >= cpuPct
+      ? `このマシンにとって限界に近い構成です。RAM が ${ramPct.toFixed(0)}% まで逼迫しており、モデル増加や大型モデル化は困難です。`
+      : `CPU が高負荷状態で、他サービスへの影響が懸念されます。`;
   } else if (worstPct >= 85) {
     overall = `現在の構成で動作しますが余裕は少ない状態です。安定運用のためにはモデルの軽量化かマシンスペックの強化を検討してください。`;
   } else if (worstPct >= 50) {
@@ -484,24 +557,137 @@ function buildHealth(s, ramTotal) {
   }
 
   const badge = (label, color) =>
-    `<span style="color:${color};border:1px solid ${color};padding:2px 10px;border-radius:10px;font-size:11px;font-weight:700;white-space:nowrap">${label}</span>`;
+    `<span style="color:${color};border:1px solid ${color};padding:2px 10px;border-radius:10px;font-size:11px;font-weight:700;white-space:nowrap;-webkit-print-color-adjust:exact;print-color-adjust:exact">${label}</span>`;
 
   return `
-    <div style="background:#111;border:1px solid #222;border-radius:8px;padding:14px 16px;margin-bottom:14px;display:flex;flex-direction:column;gap:10px">
+    <div class="report-card" style="background:#111;border:1px solid #222;border-radius:8px;padding:14px 16px;margin-bottom:14px;display:flex;flex-direction:column;gap:10px">
       <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
         ${badge('RAM ' + ramBadge, ramColor)}
-        <span style="font-size:13px;color:#bbb">${ramDetail}</span>
-        <span style="font-size:12px;color:#666">${ramAdvice}</span>
+        <span class="health-detail" style="font-size:13px">${ramDetail}</span>
+        <span class="health-advice" style="font-size:12px">${ramAdvice}</span>
       </div>
       <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
         ${badge('CPU ' + cpuBadge, cpuColor)}
-        <span style="font-size:13px;color:#bbb">${cpuDetail}</span>
-        <span style="font-size:12px;color:#666">${cpuAdvice}</span>
+        <span class="health-detail" style="font-size:13px">${cpuDetail}</span>
+        <span class="health-advice" style="font-size:12px">${cpuAdvice}</span>
       </div>
-      <div style="border-top:1px solid #1e1e1e;padding-top:10px;font-size:12px;color:#666;line-height:1.7">
+      <div class="health-summary" style="border-top:1px solid #1e1e1e;padding-top:10px;font-size:12px;line-height:1.7">
         💡 ${overall}
       </div>
     </div>`;
+}
+
+function buildRecommendations(data) {
+  const s = data.metricsSummary;
+  const metrics = data.metrics ?? [];
+  if (!s) return '';
+
+  const ramTotal = metrics[0]?.ram_total ?? 16;
+  const ramPct   = s.ram_peak_gb / ramTotal * 100;
+  const cpuCount = s.cpu_count || 4;
+  const cpuPct   = s.cpu_load_peak / cpuCount * 100;
+
+  // metrics から各Ollamaモデルのサイズを収集
+  const modelSizes = {};
+  for (const m of metrics) {
+    for (const om of m.ollama ?? []) {
+      if (!modelSizes[om.name] || modelSizes[om.name] < om.size_gb) {
+        modelSizes[om.name] = om.size_gb;
+      }
+    }
+  }
+  const sortedModels = Object.entries(modelSizes).sort((a, b) => b[1] - a[1]);
+  const ollamaParticipants = data.participants.filter(p => p.type === 'ollama');
+  const errorTurns = data.turns.filter(t => t.error);
+
+  const recs = [];
+
+  // RAM
+  if (ramPct >= 95) {
+    const items = [];
+    if (ollamaParticipants.length > 2) {
+      items.push(`参加モデル数を ${ollamaParticipants.length} → ${ollamaParticipants.length - 1} 台以下に削減（config.json で参加者を1行コメントアウト）`);
+    }
+    if (sortedModels[0]) {
+      const [name, gb] = sortedModels[0];
+      const smallerHint = name.includes(':8b') ? name.replace(':8b', ':4b') : name.includes('8b') ? name.replace('8b', '4b') : null;
+      items.push(`最大モデル「${name}」(${gb} GB) を軽量版に変更${smallerHint ? `（例: \`${smallerHint}\`）` : '（例: 7B→3B相当）'}`);
+    }
+    items.push('ベンチマーク実行中は Chrome・Docker ビルド等の重いプロセスを終了する');
+    items.push('OS のスワップ使用量を `sysctl vm.swapusage` で確認し、スワップに逃げていないかチェック');
+    recs.push({ level: 'danger', title: 'RAM 逼迫（即対応推奨）', items });
+  } else if (ramPct >= 85) {
+    recs.push({
+      level: 'warn',
+      title: 'RAM 余裕少（注意）',
+      items: [
+        '他の重いプロセスとの同時実行を避ける',
+        'ラウンド数を増やす場合は実行前に空きRAMを確認する',
+      ],
+    });
+  }
+
+  // CPU
+  if (cpuPct >= 80) {
+    recs.push({
+      level: 'danger',
+      title: 'CPU 高負荷（即対応推奨）',
+      items: [
+        'Ollama の `num_thread` パラメータを制限してコア専有を防ぐ',
+        '他の CPU 集約プロセス（動画エンコード等）との同時実行を避ける',
+        'ラウンド間にスリープを挿入して熱負荷を下げることを検討',
+      ],
+    });
+  }
+
+  // エラー
+  if (errorTurns.length > 0) {
+    const errSpeakers = [...new Set(errorTurns.map(t => t.speaker))];
+    recs.push({
+      level: 'warn',
+      title: `${errorTurns.length} ターンでエラー発生`,
+      items: [
+        `エラーが出たモデル: ${errSpeakers.join(', ')}`,
+        'Ollama の再起動（`ollama stop` → `ollama serve`）を試みる',
+        'モデルの再 pull: `ollama pull <モデル名>` で破損チェック',
+      ],
+    });
+  }
+
+  // 問題なし
+  if (recs.length === 0) {
+    recs.push({
+      level: 'ok',
+      title: 'このマシンへの負荷は許容範囲内',
+      items: [
+        `さらに ${Math.floor((ramTotal * 0.85 - s.ram_peak_gb) / (sortedModels[0]?.[1] ?? 5))} 台程度のモデル追加が可能と推定されます`,
+        'ラウンド数を増やす（推奨: 5〜7 ラウンド）か、大きめのモデルに変更を試してください',
+      ],
+    });
+  }
+
+  const COLOR = { danger: '#ef4444', warn: '#f59e0b', ok: '#10a37f' };
+
+  const rows = recs.map(r => {
+    const c = COLOR[r.level];
+    return `
+      <div style="margin-bottom:14px">
+        <div class="rec-title" style="color:${c};font-size:12px;font-weight:700;margin-bottom:5px;-webkit-print-color-adjust:exact;print-color-adjust:exact">▶ ${r.title}</div>
+        <ul class="rec-items" style="padding-left:18px;margin:0;font-size:12px;line-height:2">
+          ${r.items.map(i => `<li>${i}</li>`).join('')}
+        </ul>
+      </div>`;
+  }).join('');
+
+  return `
+  <div class="report-section" style="max-width:800px;margin:0 auto 40px;padding:0 16px">
+    <div class="report-header" style="display:flex;align-items:center;gap:8px;font-size:13px;color:#555;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #222">
+      🔧 対策案
+    </div>
+    <div class="report-card" style="background:#111;border:1px solid #222;border-radius:8px;padding:16px">
+      ${rows}
+    </div>
+  </div>`;
 }
 
 function buildMetrics(data) {
@@ -539,18 +725,19 @@ function buildMetrics(data) {
   ].map(t => `<span>${t}</span>`).join('') : '';
 
   return `
-  <div style="max-width:800px;margin:0 auto 40px;padding:0 16px">
-    <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:#555;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #222">
+  <div class="report-section" style="max-width:800px;margin:0 auto 40px;padding:0 16px">
+    <div class="report-header" style="display:flex;align-items:center;gap:8px;font-size:13px;color:#555;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #222">
       📊 負荷監視レポート
     </div>
     ${health}
     <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:#666;margin-bottom:16px">
       ${summaryItems}
     </div>
-    <div style="background:#111;border:1px solid #222;border-radius:8px;padding:16px">
+    <div class="metrics-chart-wrap report-card" style="background:#111;border:1px solid #222;border-radius:8px;padding:16px">
       <canvas id="metricsChart" height="120"></canvas>
     </div>
   </div>
+  ${buildRecommendations(data)}
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0/dist/chartjs-plugin-annotation.min.js"></script>
   <script>
