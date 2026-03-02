@@ -35,6 +35,7 @@ const hasFlag = f => args.includes(f);
 
 const rounds     = parseInt(getOpt('--rounds', '3'));
 const judge      = hasFlag('--judge');
+const monitor    = hasFlag('--monitor');
 const configFile = getOpt('--config', './config.json');
 const archiveDir = getOpt('--archive');
 const outputFile = getOpt('--output');
@@ -58,13 +59,14 @@ try {
 
 console.error(`🎭 討論開始: "${topic}"`);
 console.error(`👥 参加者: ${participants.map(p => p.name).join(' / ')}`);
-console.error(`🔄 ラウンド数: ${rounds}${judge ? ' + 審判' : ''}`);
+console.error(`🔄 ラウンド数: ${rounds}${judge ? ' + 審判' : ''}${monitor ? ' + 負荷監視' : ''}`);
 
 const result = await runDebate({
   topic,
   participants,
   rounds,
   judge,
+  monitor,
   onProgress: msg => console.error(msg),
 });
 

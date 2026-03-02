@@ -4,6 +4,7 @@
 
 import { execSync } from 'child_process';
 import { randomBytes } from 'crypto';
+import { createMonitor } from './monitor.mjs';
 
 // ── Ollama API ────────────────────────────────────────────────────────────────
 //
@@ -167,7 +168,7 @@ export function runJudge(result) {
 
 // ── Debate Runner ─────────────────────────────────────────────────────────────
 
-export async function runDebate({ topic, participants, rounds, judge = false, onProgress }) {
+export async function runDebate({ topic, participants, rounds, judge = false, monitor = false, onProgress }) {
   const result = {
     topic,
     startedAt: new Date().toISOString(),
@@ -180,6 +181,9 @@ export async function runDebate({ topic, participants, rounds, judge = false, on
     turns: [],
   };
 
+  const mon = monitor ? createMonitor(2000) : null;
+  if (mon) await mon.start();
+
   let turnNumber = 1;
 
   for (let round = 1; round <= rounds; round++) {
@@ -187,6 +191,7 @@ export async function runDebate({ topic, participants, rounds, judge = false, on
 
     for (const participant of participants) {
       onProgress?.(`⏳ ${participant.name} が考えています...`);
+      await mon?.sample(`${participant.name}:start`);
 
       try {
         const content = await getResponse(participant, result.turns, topic);
@@ -198,10 +203,12 @@ export async function runDebate({ topic, participants, rounds, judge = false, on
           timestamp: new Date().toISOString(),
         };
         result.turns.push(turn);
+        await mon?.sample(`${participant.name}:done`);
         const preview = content.replace(/\n/g, ' ').slice(0, 80);
         onProgress?.(`✅ ${participant.name}: ${preview}${content.length > 80 ? '…' : ''}\n`);
       } catch (err) {
         onProgress?.(`❌ ${participant.name} エラー: ${err.message}`);
+        await mon?.sample(`${participant.name}:error`);
         result.turns.push({
           turn:      turnNumber++,
           round,
@@ -216,9 +223,15 @@ export async function runDebate({ topic, participants, rounds, judge = false, on
 
   result.completedAt = new Date().toISOString();
 
-  // 討論終了後に使用したOllamaモデルを全て解放
   const ollamaModels = participants.filter(p => p.type === 'ollama').map(p => p.model);
   await cleanupOllama(ollamaModels);
+
+  if (mon) {
+    await mon.stop();
+    result.metrics = mon.getMetrics();
+    result.metricsSummary = mon.getSummary();
+    onProgress?.(`📊 監視完了: RAM peak ${result.metricsSummary.ram_peak_gb}GB / CPU load peak ${result.metricsSummary.cpu_load_peak}`);
+  }
 
   if (judge) {
     try {

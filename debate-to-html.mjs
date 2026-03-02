@@ -331,6 +331,7 @@ function buildHtml(data) {
       <span>💬 ${data.turns.length}ターン</span>
       <span>⏱ ${duration}</span>
       ${data.judgment ? '<span>⚖️ 審判あり</span>' : ''}
+      ${data.metrics  ? '<span>📊 負荷監視あり</span>' : ''}
     </div>
   </div>
 
@@ -343,6 +344,7 @@ function buildHtml(data) {
   </div>
 
   ${data.judgment ? buildJudgment(data) : ''}
+  ${data.metrics  ? buildMetrics(data)  : ''}
 
   <div class="footer">
     生成: ${new Date(data.startedAt).toLocaleString('ja-JP')}
@@ -401,6 +403,89 @@ function buildJudgment(data) {
     </table>
     ${judgment.summary ? `<div class="judgment-summary">${escapeHtml(judgment.summary)}</div>` : ''}
   </div>`;
+}
+
+function buildMetrics(data) {
+  const { metrics, metricsSummary: s } = data;
+  if (!metrics?.length) return '';
+
+  const SPEAKER_COLORS = {
+    ChatGPT: '#10a37f', Llama3: '#7c5cfc', Mistral: '#f59e0b',
+    Qwen2_5: '#06b6d4', Qwen3: '#ec4899',
+  };
+
+  // Chart.jsに渡すデータをJSON化
+  const labels   = JSON.stringify(metrics.map(m => new Date(m.ts).toLocaleTimeString('ja-JP')));
+  const ramData  = JSON.stringify(metrics.map(m => m.ram_used));
+  const cpuData  = JSON.stringify(metrics.map(m => m.cpu_load));
+  const ramTotal = metrics[0]?.ram_total ?? 16;
+
+  // イベント（ターン開始）のインデックスを抽出 → 縦線アノテーション
+  const annotations = metrics
+    .map((m, i) => ({ i, event: m.event }))
+    .filter(e => e.event?.endsWith(':start'))
+    .map(e => {
+      const speaker = e.event.replace(':start', '');
+      const color = SPEAKER_COLORS[speaker] ?? '#888';
+      return `"ann${e.i}": { type: "line", xMin: ${e.i}, xMax: ${e.i}, borderColor: "${color}", borderWidth: 1, borderDash: [4,3], label: { display: true, content: "${speaker}", color: "${color}", font: { size: 10 }, position: "start" } }`;
+    }).join(',\n');
+
+  const summaryItems = s ? [
+    `RAM ピーク: <strong>${s.ram_peak_gb} GB</strong>`,
+    `RAM 最小: ${s.ram_min_gb} GB`,
+    `CPU loadavg ピーク: <strong>${s.cpu_load_peak}</strong>`,
+    `CPU loadavg 平均: ${s.cpu_load_avg}`,
+    `サンプル数: ${s.sample_count} (${s.duration_sec}秒)`,
+  ].map(t => `<span>${t}</span>`).join('') : '';
+
+  return `
+  <div style="max-width:800px;margin:0 auto 40px;padding:0 16px">
+    <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:#555;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #222">
+      📊 負荷監視レポート
+    </div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:#888;margin-bottom:16px">
+      ${summaryItems}
+    </div>
+    <div style="background:#111;border:1px solid #222;border-radius:8px;padding:16px">
+      <canvas id="metricsChart" height="120"></canvas>
+    </div>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0/dist/chartjs-plugin-annotation.min.js"></script>
+  <script>
+    new Chart(document.getElementById('metricsChart'), {
+      data: {
+        labels: ${labels},
+        datasets: [
+          {
+            type: 'line', label: 'RAM使用量 (GB)',
+            data: ${ramData},
+            borderColor: '#7c5cfc', backgroundColor: 'rgba(124,92,252,0.15)',
+            fill: true, tension: 0.3, pointRadius: 0, yAxisID: 'yRam',
+          },
+          {
+            type: 'line', label: 'CPU loadavg',
+            data: ${cpuData},
+            borderColor: '#f59e0b', backgroundColor: 'transparent',
+            tension: 0.3, pointRadius: 0, borderDash: [4,2], yAxisID: 'yCpu',
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { labels: { color: '#888', font: { size: 11 } } },
+          annotation: { annotations: { ${annotations} } },
+        },
+        scales: {
+          x:    { ticks: { color: '#555', maxTicksLimit: 10, font: { size: 10 } }, grid: { color: '#1a1a1a' } },
+          yRam: { position: 'left',  min: 0, max: ${ramTotal}, ticks: { color: '#7c5cfc', font: { size: 10 } }, grid: { color: '#1a1a1a' }, title: { display: true, text: 'RAM (GB)', color: '#7c5cfc', font: { size: 10 } } },
+          yCpu: { position: 'right', min: 0,                   ticks: { color: '#f59e0b', font: { size: 10 } }, grid: { display: false },    title: { display: true, text: 'CPU load', color: '#f59e0b', font: { size: 10 } } },
+        },
+      },
+    });
+  </script>`;
 }
 
 // ── 出力 ──────────────────────────────────────────────────────────────────────
