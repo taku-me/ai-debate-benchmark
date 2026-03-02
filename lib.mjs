@@ -7,12 +7,35 @@ import { randomBytes } from 'crypto';
 
 // ── Ollama API ────────────────────────────────────────────────────────────────
 
+// 直前に使ったモデルを記録（切り替えタイミングでのみアンロード）
+let _lastOllamaModel = null;
+
+// モデル切り替え前に前モデルをアンロード
+// 「レスポンス後すぐにアンロード」ではなく「次モデルを呼ぶ直前にアンロード」方式:
+//   - 同じモデルが連続する場合はアンロードしない（無駄なロード/アンロードを防ぐ）
+//   - 他プロセスが同じモデルを使っている可能性がある場合の影響範囲を最小化
+async function switchOllamaModel(nextModel) {
+  if (_lastOllamaModel && _lastOllamaModel !== nextModel) {
+    try {
+      const res = await fetch('http://localhost:11434/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: _lastOllamaModel, keep_alive: 0 }),
+      });
+      await res.text();
+    } catch {
+      // アンロード失敗はサイレントに無視
+    }
+  }
+  _lastOllamaModel = nextModel;
+}
+
 export async function callOllama(model, messages) {
+  await switchOllamaModel(model); // 別モデルが残っていればここでアンロード
   const res = await fetch('http://localhost:11434/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    // keep_alive: 0 = レスポンス後すぐにアンロード（2モデル同時ロード防止）
-    body: JSON.stringify({ model, messages, stream: false, keep_alive: 0 }),
+    body: JSON.stringify({ model, messages, stream: false }),
   });
   if (!res.ok) throw new Error(`Ollama error: ${res.status} ${await res.text()}`);
   const data = await res.json();
