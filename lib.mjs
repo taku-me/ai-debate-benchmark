@@ -6,40 +6,43 @@ import { execSync } from 'child_process';
 import { randomBytes } from 'crypto';
 
 // ── Ollama API ────────────────────────────────────────────────────────────────
+//
+// モデルライフサイクル管理方針:
+//   native /api/chat + keep_alive: 0 を使う。
+//
+//   keep_alive: 0 の動作（Ollama仕様）:
+//     Ollamaはアクティブリクエスト数を内部でカウントしており、
+//     「このリクエストが完了してアイドルになったら即アンロード」という指示。
+//     実行中の他プロセスリクエストを強制終了させることはない（リクエストレベルでは安全）。
+//     ただし「これから使おうとしているプロセス」への保護は不可能（TOCTOU競合）。
+//     → 討論スクリプトはOllamaを専有する重いバッチ処理として運用すること。
+//
+//   /v1/chat/completions（OpenAI互換）はバージョンによってkeep_aliveを無視するため、
+//   native /api/chat エンドポイントを使用。
 
-// 直前に使ったモデルを記録（切り替えタイミングでのみアンロード）
-let _lastOllamaModel = null;
+export async function callOllama(model, messages) {
+  const res = await fetch('http://localhost:11434/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model, messages, stream: false, keep_alive: 0 }),
+  });
+  if (!res.ok) throw new Error(`Ollama error: ${res.status} ${await res.text()}`);
+  const data = await res.json();
+  return data.message.content.trim();
+}
 
-// モデル切り替え前に前モデルをアンロード
-// 「レスポンス後すぐにアンロード」ではなく「次モデルを呼ぶ直前にアンロード」方式:
-//   - 同じモデルが連続する場合はアンロードしない（無駄なロード/アンロードを防ぐ）
-//   - 他プロセスが同じモデルを使っている可能性がある場合の影響範囲を最小化
-async function switchOllamaModel(nextModel) {
-  if (_lastOllamaModel && _lastOllamaModel !== nextModel) {
+// 討論終了時に呼ぶ: keep_alive: 0 が効いていれば不要だが念のため明示アンロード
+export async function cleanupOllama(models) {
+  for (const model of models) {
     try {
       const res = await fetch('http://localhost:11434/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: _lastOllamaModel, keep_alive: 0 }),
+        body: JSON.stringify({ model, keep_alive: 0 }),
       });
       await res.text();
-    } catch {
-      // アンロード失敗はサイレントに無視
-    }
+    } catch { /* サイレント */ }
   }
-  _lastOllamaModel = nextModel;
-}
-
-export async function callOllama(model, messages) {
-  await switchOllamaModel(model); // 別モデルが残っていればここでアンロード
-  const res = await fetch('http://localhost:11434/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, messages, stream: false }),
-  });
-  if (!res.ok) throw new Error(`Ollama error: ${res.status} ${await res.text()}`);
-  const data = await res.json();
-  return data.choices[0].message.content.trim();
 }
 
 // ── OpenClaw API ──────────────────────────────────────────────────────────────
@@ -212,6 +215,10 @@ export async function runDebate({ topic, participants, rounds, judge = false, on
   }
 
   result.completedAt = new Date().toISOString();
+
+  // 討論終了後に使用したOllamaモデルを全て解放
+  const ollamaModels = participants.filter(p => p.type === 'ollama').map(p => p.model);
+  await cleanupOllama(ollamaModels);
 
   if (judge) {
     try {
