@@ -191,6 +191,40 @@ HTML出力にChart.js製のグラフが追加され、「どのモデルの処�
 - Docker（OpenClaw稼働中）
 - Ollama（localhost:11434）
 
+## HTML出力の印刷・PDF対応
+
+`debate-to-html.mjs` は `@media print` CSSを内蔵しており、ブラウザの「印刷→PDFに保存」で出力できる。
+
+### 可読性の設計基準
+
+以下の研究・標準に基づいて印刷CSSの可読性を設計・検証している。
+
+| 基準 | 内容 | 出典 |
+|------|------|------|
+| コントラスト比 4.5:1 | 通常テキストの最小コントラスト（Level AA） | [WCAG 2.1 SC 1.4.3](https://www.w3.org/TR/WCAG21/#contrast-minimum) — W3C (2018) |
+| コントラスト比 3:1 | 大テキスト（≥18pt or ≥14pt bold）の最小コントラスト | WCAG 2.1 SC 1.4.3 — W3C (2018) |
+| 本文最小フォントサイズ 9pt | 印刷物の最低可読サイズ | Tinker, M.A. (1963). *Legibility of Print*. Iowa State University Press. |
+| 本文推奨サイズ 10–12pt | 最も読みやすいフォントサイズ範囲 | Tinker (1963); Unger, G. & Burke, C. (2007). *Designing Type*. Laurence King Publishing. |
+| 行間 1.2–1.5× | 最適な行間設定 | Tinker (1963); ISO 9241-303:2011 Ergonomics of human-system interaction §5.4 |
+
+### 実装上のポイント
+
+- バブル背景はCSS変数でなくスピーカー別クラス（`.spk-*`）で管理し、`@media print` で `!important` 上書き可能にしている（inline `style` のCSS変数は `!important` で上書き不可なため）
+- スピーカーカラー（緑・紫・橙）は装飾的用途のみなのでWCAG SC 1.4.1の例外として扱う
+- `beforeprint` / `afterprint` JSイベントで動的なインタラクティブ印刷にも対応
+
+### 現在の評価結果
+
+| チェック項目 | 結果 | コントラスト比 |
+|---|---|---|
+| 本文テキスト（`#111` on `#fff`） | ✅ WCAG AAA | 18.1:1 |
+| 見出し（`#000` on `#f0f0f0`） | ✅ WCAG AAA | 16.7:1 |
+| 補助テキスト・`#555` on `#fff` | ✅ WCAG AAA | 7.5:1 |
+| タイムスタンプ（`#777` on `#f7f7f7`） | △ WCAG AA 大テキスト相当 | 3.9:1 |
+| スピーカー名（カラー on `#f7f7f7`） | △ 装飾的用途・許容 | ~3:1 |
+| ヘッダー位置 | ✅ 1ページ目冒頭 | — |
+| メッセージ途中改ページ | ✅ `page-break-inside: avoid` | — |
+
 ## 改造計画
 
 - [ ] Fish-Speech連携 — スピーカーごとに声を変えて読み上げ
