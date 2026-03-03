@@ -1,0 +1,24 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-error.log
+
+# 環境変数・認証情報
+.env
+.env.local
+.env.*.local
+
+# 出力・一時ファイル
+*.log
+/tmp/
+
+# エディタ
+.vscode/
+.idea/
+*.swp
+*.swo
