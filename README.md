@@ -29,6 +29,10 @@ RAM ピーク値・CPU loadavg の推移がHTML上のグラフで確認できる
 ## セットアップ
 
 ```bash
+# リポジトリをクローン（geminiブランチを指定）
+git clone -b gemini https://github.com/taku-me/ai-debate-benchmark.git
+cd ai-debate-benchmark
+
 # Gemini APIキーを設定
 cp .env.example .env
 # .envを編集してGEMINI_API_KEYを設定
