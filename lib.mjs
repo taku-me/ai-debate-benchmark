@@ -2,8 +2,6 @@
  * lib.mjs - 共有コア関数
  */
 
-import { execSync } from 'child_process';
-import { randomBytes } from 'crypto';
 import { createMonitor } from './monitor.mjs';
 
 // ── Ollama API ────────────────────────────────────────────────────────────────
@@ -46,16 +44,35 @@ export async function cleanupOllama(models) {
   }
 }
 
-// ── OpenClaw API ──────────────────────────────────────────────────────────────
+// ── Gemini API ────────────────────────────────────────────────────────────────
 
-export function callOpenClaw(message) {
-  const sessionId = `debate-${randomBytes(6).toString('hex')}`;
-  const escaped = message.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n');
-  const cmd = `docker exec openclaw-portable openclaw agent --session-id "${sessionId}" --message "${escaped}" --json`;
-  const raw = execSync(cmd, { timeout: 120_000, encoding: 'utf-8' });
-  const data = JSON.parse(raw);
-  const text = data?.result?.payloads?.[0]?.text;
-  if (!text) throw new Error(`Unexpected openclaw response: ${raw.slice(0, 200)}`);
+const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
+
+export async function callGemini(model, messages) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('GEMINI_API_KEY environment variable is not set');
+
+  // OpenAI-style messages → Gemini format
+  const systemMsg = messages.find(m => m.role === 'system');
+  const contents = messages
+    .filter(m => m.role !== 'system')
+    .map(m => ({
+      role: m.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: m.content }],
+    }));
+
+  const body = { contents };
+  if (systemMsg) body.systemInstruction = { parts: [{ text: systemMsg.content }] };
+
+  const res = await fetch(`${GEMINI_BASE_URL}/models/${model}:generateContent?key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Gemini error: ${res.status} ${await res.text()}`);
+  const data = await res.json();
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!text) throw new Error(`Unexpected Gemini response: ${JSON.stringify(data).slice(0, 200)}`);
   return text.trim();
 }
 
@@ -91,36 +108,20 @@ export function buildOllamaMessages(participant, turns, topic) {
   ];
 }
 
-export function buildOpenClawMessage(turns, topic, speakerName = 'ChatGPT') {
-  const header = [
-    `【討論参加依頼】`,
-    `あなたは${speakerName}として以下の討論に参加しています。`,
-    `トピック: 「${topic}」`,
-    ``,
-    `ルール: 明確な立場を取り、200〜400字程度で述べてください。余計な前置きは不要です。`,
-  ].join('\n');
-
-  if (turns.length === 0) {
-    return `${header}\n\nこのトピックについて、最初の意見を述べてください。`;
-  }
-  return `${header}\n\nこれまでの討論:\n\n${buildHistory(turns)}\n\nあなたの番です。前の発言者（特に直前）に反応しながら意見を述べてください。`;
-}
-
 // ── Response Dispatcher ───────────────────────────────────────────────────────
 
 export async function getResponse(participant, turns, topic) {
-  if (participant.type === 'openclaw') {
-    const message = buildOpenClawMessage(turns, topic, participant.name);
-    return callOpenClaw(message);
+  const messages = buildOllamaMessages(participant, turns, topic);
+  if (participant.type === 'gemini') {
+    return callGemini(participant.model ?? 'gemini-2.5-flash', messages);
   } else {
-    const messages = buildOllamaMessages(participant, turns, topic);
     return callOllama(participant.model, messages);
   }
 }
 
 // ── Judge ─────────────────────────────────────────────────────────────────────
 
-export function runJudge(result) {
+export async function runJudge(result) {
   const participantNames = result.participants.map(p => p.name).join('、');
   const scoreKeys = result.participants.map(p => `    "${p.name}": { "japanese_quality": 0, "topic_relevance": 0, "argument_coherence": 0, "comment": "..." }`).join(',\n');
 
@@ -152,7 +153,7 @@ export function runJudge(result) {
   ].join('\n');
 
   console.error('⚖️  審判が評価中...');
-  const raw = callOpenClaw(prompt);
+  const raw = await callGemini('gemini-2.5-flash', [{ role: 'user', content: prompt }]);
 
   // JSONを抽出（前後に余計なテキストがあっても対応）
   const match = raw.match(/\{[\s\S]+\}/);
@@ -235,7 +236,7 @@ export async function runDebate({ topic, participants, rounds, judge = false, mo
 
   if (judge) {
     try {
-      result.judgment = runJudge(result);
+      result.judgment = await runJudge(result);
       onProgress?.(`✅ 審判完了: ${result.judgment.ranking?.join(' > ')}`);
     } catch (err) {
       onProgress?.(`❌ 審判エラー: ${err.message}`);
