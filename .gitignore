@@ -16,6 +16,9 @@ yarn-error.log
 # 出力・一時ファイル
 *.log
 /tmp/
+result-*.json
+result-*.html
+results/
 
 # エディタ
 .vscode/
