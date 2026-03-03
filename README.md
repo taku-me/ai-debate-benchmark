@@ -1,6 +1,6 @@
 # AI Debate Benchmark
 
-**ローカルLLM × ChatGPT の日本語会話能力ベンチマークツール**
+**ローカルLLM × Gemini の日本語会話能力ベンチマークツール**
 
 新モデルがリリースされたとき、`config.json` を1行追記するだけで日本語性能を他モデルと比較できる。
 副産物として、討論実行中のRAM・CPU負荷データも自動記録される。
@@ -24,6 +24,24 @@ RAM ピーク値・CPU loadavg の推移がHTML上のグラフで確認できる
 ├── monitor.mjs         # システム負荷サンプリングモジュール
 ├── config.json         # 参加者・ベンチマークトピック設定
 └── results/            # アーカイブ（自動生成）
+```
+
+## セットアップ
+
+```bash
+# Gemini APIキーを設定
+cp .env.example .env
+# .envを編集してGEMINI_API_KEYを設定
+# https://aistudio.google.com/app/apikey で取得できる
+
+# 実行時に環境変数として渡す場合
+export GEMINI_API_KEY=your_api_key_here
+```
+
+Ollama参加者を使う場合は [Ollama](https://ollama.com/) をインストールしてモデルを pull しておく:
+```bash
+ollama pull llama3.1:8b
+ollama pull mistral-nemo
 ```
 
 ## クイックスタート
@@ -70,11 +88,11 @@ node benchmark.mjs --topic 0
 ```json
 {
   "participants": [
-    { "name": "ChatGPT", "type": "openclaw", "model": "gpt-5.3-codex" },
-    { "name": "Llama3",  "type": "ollama",   "model": "llama3.1:8b" },
-    { "name": "Mistral", "type": "ollama",   "model": "mistral-nemo" },
-    { "name": "Qwen2.5", "type": "ollama",   "model": "qwen2.5:7b-instruct" },
-    { "name": "Qwen3",   "type": "ollama",   "model": "qwen3:8b" }
+    { "name": "Gemini",  "type": "gemini",  "model": "gemini-2.5-flash" },
+    { "name": "Llama3",  "type": "ollama",  "model": "llama3.1:8b" },
+    { "name": "Mistral", "type": "ollama",  "model": "mistral-nemo" },
+    { "name": "Qwen2.5", "type": "ollama",  "model": "qwen2.5:7b-instruct" },
+    { "name": "Qwen3",   "type": "ollama",  "model": "qwen3:8b" }
   ],
   "benchmarkTopics": [
     "AIは人間の仕事を奪うか",
@@ -90,9 +108,9 @@ node benchmark.mjs --topic 0
 
 ## APIバックエンド
 
-| 種別 | エンドポイント | 備考 |
+| type | エンドポイント | 備考 |
 |------|--------------|------|
-| `type: "openclaw"` | `docker exec openclaw-portable openclaw agent ...` | ChatGPT Plus経由 |
+| `type: "gemini"` | `https://generativelanguage.googleapis.com/v1beta` | `GEMINI_API_KEY` 環境変数が必要 |
 | `type: "ollama"` | `http://localhost:11434/api/chat` | `keep_alive: 0` で即アンロード |
 
 ### Ollamaのメモリ管理
@@ -107,7 +125,7 @@ Ollamaモデルは1つずつ順番に実行し、レスポンス後に即アン�
 
 ## 審判モード（`--judge`）
 
-全ターン終了後にChatGPTが3軸で採点。日本語の自然さを定量化する:
+全ターン終了後にGeminiが3軸で採点。日本語の自然さを定量化する:
 
 | 軸 | 説明 |
 |----|------|
@@ -188,8 +206,8 @@ HTML出力にChart.js製のグラフが追加され、「どのモデルの処�
 ## 環境要件
 
 - Node.js 22+
-- Docker（OpenClaw稼働中）
-- Ollama（localhost:11434）
+- Gemini APIキー（[Google AI Studio](https://aistudio.google.com/app/apikey) で無料取得可能）
+- Ollama（Ollama参加者を使う場合のみ、localhost:11434）
 
 ## HTML出力の印刷・PDF対応
 
