@@ -92,11 +92,10 @@ node benchmark.mjs --topic 0
 ```json
 {
   "participants": [
-    { "name": "Gemini",  "type": "gemini",  "model": "gemini-2.5-flash" },
-    { "name": "Llama3",  "type": "ollama",  "model": "llama3.1:8b" },
-    { "name": "Mistral", "type": "ollama",  "model": "mistral-nemo" },
-    { "name": "Qwen2.5", "type": "ollama",  "model": "qwen2.5:7b-instruct" },
-    { "name": "Qwen3",   "type": "ollama",  "model": "qwen3:8b" }
+    { "name": "Gemini", "type": "gemini", "model": "gemini-2.5-flash" },
+    { "name": "Gemma3", "type": "ollama", "model": "gemma3:4b" },
+    { "name": "Qwen3",  "type": "ollama", "model": "qwen3:8b" },
+    { "name": "Llama3", "type": "ollama", "model": "llama3.1:8b" }
   ],
   "benchmarkTopics": [
     "AIは人間の仕事を奪うか",
