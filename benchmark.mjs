@@ -175,9 +175,13 @@ function buildSummaryHtml(results, participants) {
     .rank-2::before { content: '🥈 '; }
     .rank-3::before { content: '🥉 '; }
     .meta { color: #444; font-size: 12px; margin-top: 40px; text-align: center; }
+    .back-nav { display: block; color: #6e7681; text-decoration: none; font-size: 12px; margin-bottom: 6px; }
+    .back-nav:hover { color: #aaa; }
+    @media print { .back-nav { display: none !important; } }
   </style>
 </head>
 <body>
+  <a class="back-nav" href="/debate/">← AI討論一覧</a>
   <h1>🏆 AI討論ベンチマーク</h1>
   <div class="subtitle">${results.length}トピック・${participants.map(p=>p.name).join(' vs ')} — 生成: ${new Date().toLocaleString('ja-JP')}</div>
 
