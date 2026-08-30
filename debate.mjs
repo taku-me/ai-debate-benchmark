@@ -11,11 +11,16 @@
  *   --config <file>     参加者設定JSONファイル（デフォルト: config.json）
  *   --archive <dir>     結果をアーカイブディレクトリに保存
  *   --output <file>     結果をJSONファイルに保存（省略時はstdout）
+ *   --no-publish        HTML生成・web公開をスキップ
  */
 
 import { readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { resolve } from 'path';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
+import { execSync } from 'child_process';
 import { runDebate, topicSlug } from './lib.mjs';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // ── Args ──────────────────────────────────────────────────────────────────────
 
@@ -36,9 +41,13 @@ const hasFlag = f => args.includes(f);
 const rounds     = parseInt(getOpt('--rounds', '3'));
 const judge      = hasFlag('--judge');
 const monitor    = hasFlag('--monitor');
+const noPublish  = hasFlag('--no-publish');
 const configFile = getOpt('--config', './config.json');
 const archiveDir = getOpt('--archive');
 const outputFile = getOpt('--output');
+
+const PUBLIC_DIR = '/Volumes/SANDBOX/services/public/debate';
+const MANIFEST   = `${PUBLIC_DIR}/manifest.json`;
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -49,7 +58,6 @@ try {
 } catch {
   // config.json がなければデフォルト参加者
   participants = [
-    { name: 'ChatGPT', type: 'openclaw' },
     { name: 'Llama3',  type: 'ollama', model: 'llama3.1:8b' },
     { name: 'Mistral', type: 'ollama', model: 'mistral-nemo' },
   ];
@@ -87,4 +95,39 @@ if (outputFile) {
   console.error(`💾 保存完了: ${outputFile}`);
 } else if (!archiveDir) {
   console.log(json);
+}
+
+// ── HTML生成 & web公開 ────────────────────────────────────────────────────────
+
+if (!noPublish) {
+  try {
+    // JSON を一時ファイルに書き出し
+    const tmpJson = resolve(__dirname, `.tmp-debate-${Date.now()}.json`);
+    writeFileSync(tmpJson, json, 'utf-8');
+
+    // HTML 生成
+    const htmlFile = `debate-${topicSlug(topic)}.html`;
+    const htmlDest = `${PUBLIC_DIR}/${htmlFile}`;
+    mkdirSync(PUBLIC_DIR, { recursive: true });
+    execSync(`node ${resolve(__dirname, 'debate-to-html.mjs')} ${tmpJson} --output ${htmlDest}`);
+    execSync(`rm ${tmpJson}`);
+    console.error(`🌐 HTML: ${htmlDest}`);
+
+    // manifest.json 更新（先頭に追加）
+    let manifest = [];
+    try { manifest = JSON.parse(readFileSync(MANIFEST, 'utf-8')); } catch {}
+    // 同じファイル名が既にあれば置き換え
+    manifest = manifest.filter(e => e.file !== htmlFile);
+    manifest.unshift({
+      file: htmlFile,
+      date: new Date().toISOString().slice(0, 19),
+      title: topic,
+      participants: result.participants.map(p => p.name),
+    });
+    writeFileSync(MANIFEST, JSON.stringify(manifest, null, 2), 'utf-8');
+    console.error(`📋 manifest 更新: ${MANIFEST}`);
+    console.error(`🔗 http://100.84.44.28:18791/debate/${htmlFile}`);
+  } catch (err) {
+    console.error(`❌ 公開エラー: ${err.message}`);
+  }
 }

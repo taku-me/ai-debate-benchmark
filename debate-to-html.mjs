@@ -206,7 +206,12 @@ function buildHtml(data) {
 
       /* ── フッター ── */
       .footer { color: #888 !important; }
+
+      .back-nav { display: none !important; }
     }
+
+    .back-nav { display: block; color: #6e7681; text-decoration: none; font-size: 12px; margin-bottom: 6px; }
+    .back-nav:hover { color: #aaa; }
 
     /* ヘッダー */
     .header {
@@ -425,6 +430,7 @@ function buildHtml(data) {
   </script>
 
   <div class="header">
+    <a class="back-nav" href="/debate/">← AI討論一覧</a>
     <div class="header-label">AI 討論ログ</div>
     <div class="header-topic">${escapeHtml(data.topic)}</div>
     <div class="header-meta">
