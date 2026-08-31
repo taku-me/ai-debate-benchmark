@@ -19,6 +19,19 @@ import { createMonitor } from './monitor.mjs';
 //   /v1/chat/completions（OpenAI互換）はバージョンによってkeep_aliveを無視するため、
 //   native /api/chat エンドポイントを使用。
 
+export async function callLMStudio(model, messages) {
+  const res = await fetch('http://localhost:1234/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model, messages, stream: false, chat_template_kwargs: { thinking: false } }),
+  });
+  if (!res.ok) throw new Error(`LM Studio error: ${res.status} ${await res.text()}`);
+  const data = await res.json();
+  return data.choices[0].message.content
+    .replace(/<think>[\s\S]*?<\/think>\n*/g, '')
+    .trim();
+}
+
 export async function callOllama(model, messages) {
   const res = await fetch('http://localhost:11434/api/chat', {
     method: 'POST',
@@ -114,6 +127,8 @@ export async function getResponse(participant, turns, topic) {
   const messages = buildOllamaMessages(participant, turns, topic);
   if (participant.type === 'gemini') {
     return callGemini(participant.model ?? 'gemini-2.5-flash', messages);
+  } else if (participant.type === 'lmstudio') {
+    return callLMStudio(participant.model, messages);
   } else {
     return callOllama(participant.model, messages);
   }
