@@ -1,0 +1,13 @@
+{
+ "created": "2026-10-21",
+ "note": "既存の違反の指紋。段 2 で減らす。増やす変更はユーザーの承認が要る(docs/security-gate-design.md §3.6)",
+ "count": 1,
+ "findings": [
+  {
+   "rule": "inject.shell",
+   "path": "lib.mjs",
+   "fp": "1e857e23fe472939b61e5af8",
+   "hint": "execSync() に連結した文字列。execFileSync(cmd, [args]) にする"
+  }
+ ]
+}
